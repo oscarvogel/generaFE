@@ -10,6 +10,13 @@
 # for more details.
 
 #Punto de Inicio del sistema
+import os
+
+from modelos.CAEA import CAEA
+from modelos.CbteRelacionado import CbteRel
+from modelos.Empresas import Empresa
+from modelos.IVA import IVA
+from modelos.Tributo import Tributo
 
 __author__ = "Jose Oscar Vogel <oscarvogel@gmail.com>"
 __copyright__ = "Copyright (C) 2018 Jose Oscar Vogel"
@@ -26,11 +33,14 @@ from PyQt4.QtGui import QApplication
 
 from controladores.FE import FEv1
 from controladores.Main import MainController
-from libs.Utiles import LeerIni, FechaMysql, envia_correo, DeCodifica
+from libs.Utiles import LeerIni, FechaMysql, envia_correo, DeCodifica, encriptar, GrabarIni
 from modelos.Encabezado import Encabezado
 
 
 def inicio():
+    if LeerIni("iniciosistema") == "":
+        #GrabarIni(clave='password', key='param', valor=claveencriptada)
+        GrabarIni(valor=os.getcwd() + "\\", key="param", clave="iniciosistema")
     logging.basicConfig(filename=join(LeerIni("iniciosistema"), 'errors.log'), level=logging.DEBUG,
                         format='%(asctime)s %(message)s',
                         datefmt='%m/%d/%Y %I:%M:%S %p')
@@ -95,5 +105,29 @@ if __name__ == "__main__":
                                                                DeCodifica(controlador.motivoobs)),
                                  password_email='Fasa0298')
                 d.save()
+
+    elif "--clavemysql" in sys.argv:
+        clave = raw_input("Ingresa la clave: ")
+        claveencriptada, keyencriptado = encriptar(password=clave)
+        GrabarIni(clave='password',key='param', valor=claveencriptada)
+        GrabarIni(clave='key', key='param', valor=keyencriptado)
+
+    elif "--creatablas" in sys.argv:
+        encabeza = Encabezado()
+        encabeza.create_table(True)
+        iva = IVA()
+        iva.create_table(True)
+        tributo = Tributo()
+        tributo.create_table(True)
+        cbterel = CbteRel()
+        cbterel.create_table(True)
+        empresa = Empresa()
+        empresa.create_table(True)
+        caea = CAEA()
+        caea.create_table(True)
+
+    elif "--help" in sys.argv or "-h" in sys.argv:
+        print("--clavemysql graba la contraseña de mysql")
+        print("--creatablas crea tablas segun lo configurado en el sistema.ini")
     else:
         inicio()

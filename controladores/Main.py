@@ -217,7 +217,6 @@ class MainController(ControladorBase):
                 caea.fchproceso = wsfe.FchProceso
                 caea.fchtopeinf = wsfe.FchTopeInf
                 caea.obs = wsfe.Obs
-                caea.empresa = 1 #ferreteria por ahora tengo que ver como hacer para las otras empresas
                 caea.save()
 
     def GeneraCAE(self):

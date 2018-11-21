@@ -15,8 +15,9 @@ class MainView(VistaBase):
         self.setGeometry(150, 150, 650, 450)
         self.setWindowTitle('Factura Electronica - Servidor MySql {}'.format(LeerIni(clave='host')))
         self.layoutPpal = QVBoxLayout(self)
-        self.lblTitulo = EtiquetaTitulo(texto="{}-{}".format(
-            LeerIni(clave="nombre_sistema"), LeerIni(clave='EMPRESA', key='FACTURA')))
+        self.lblTitulo = EtiquetaTitulo(texto="{}-{}-{}".format(
+            LeerIni(clave="nombre_sistema"), LeerIni(clave='EMPRESA', key='FACTURA'),
+                                        "Homologacion" if LeerIni("homo") == "S" else "Produccion"))
         self.layoutPpal.addWidget(self.lblTitulo)
 
         self.avance = Avance()
