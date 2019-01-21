@@ -8,7 +8,7 @@ from peewee import fn
 
 from controladores.ControladorBase import ControladorBase
 from controladores.FE import FEv1
-from libs.Utiles import LeerIni, FechaMysql, envia_correo, DeCodifica
+from libs.Utiles import LeerIni, FechaMysql, envia_correo, DeCodifica, inicializar_y_capturar_excepciones, desencriptar
 from modelos.CAEA import CAEA
 from modelos.CbteRelacionado import CbteRel
 from modelos.Encabezado import Encabezado
@@ -30,6 +30,7 @@ class MainController(ControladorBase):
     xml_response = ''
     xml_request = ''
     grabaxml = False
+    cuit = LeerIni(clave='cuit', key='WSFEv1')
 
     def __init__(self):
         super(MainController, self).__init__()
@@ -47,7 +48,8 @@ class MainController(ControladorBase):
         self.lProcesa = False
         QApplication.exit(1)
 
-    def GeneraFE(self):
+    @inicializar_y_capturar_excepciones
+    def GeneraFE(self, *args, **kwargs):
         self.view.btnIniciar.setEnabled(False)
         while self.lProcesa:
             QApplication.processEvents()
@@ -59,16 +61,30 @@ class MainController(ControladorBase):
         ok = True
         cbterel = None
         wsfev1 = FEv1()
+        wsfev1.cuit_emisor = d.empresa.cuit.encode('ascii')
+        self.cuit = wsfev1.cuit_emisor
+        if LeerIni(clave='homo') == 'N': #produccion
+            wsfev1.cert_prod = d.empresa.crt.strip().encode('ascii')
+            wsfev1.privatekey_prod = d.empresa.key.strip().encode('ascii')
+
+        wsfev1.empresa = d.empresa.codigo
+
         ta = wsfev1.Autenticar()
         #Setear tocken y sign de autorizacion(ticket de accesso, pasos previos)
         wsfev1.SetTicketAcceso(ta)
         #Conectar al Servicio Web de Facturacion
         #Produccion usar: *-- ok = WSFE.Conectar("", "https://servicios1.afip.gov.ar/wsfev1/service.asmx?WSDL") & & Producción
+        # if LeerIni(clave='homo') == 'S':
+        #     wsfev1.Cuit = '20233472035'  # CUIT del programador para pruebas
+        #     ok = wsfev1.Conectar("") #Homologacion
+        # else:
+        #     wsfev1.Cuit = LeerIni(clave='cuit', key='WSFEv1')  # CUIT del emisor (debe estar registrado en la AFIP)
+        #     ok = wsfev1.Conectar("", "https://servicios1.afip.gov.ar/wsfev1/service.asmx?WSDL")
         if LeerIni(clave='homo') == 'S':
             wsfev1.Cuit = '20233472035'  # CUIT del programador para pruebas
             ok = wsfev1.Conectar("") #Homologacion
         else:
-            wsfev1.Cuit = LeerIni(clave='cuit', key='WSFEv1')  # CUIT del emisor (debe estar registrado en la AFIP)
+            wsfev1.Cuit = self.cuit  # CUIT del emisor (debe estar registrado en la AFIP)
             ok = wsfev1.Conectar("", "https://servicios1.afip.gov.ar/wsfev1/service.asmx?WSDL")
 
         concepto = d.concepto
@@ -87,7 +103,7 @@ class MainController(ControladorBase):
         imp_op_ex = str(round(d.impopex, 2))
         fecha_cbte = FechaMysql(d.fechacbte)
         #Fechas del periodo del servicio facturado(solo siconcepto > 1)
-        if concepto in [wsfev1.SERVICIOS, wsfev1.PRODUCTOYSERVICIOS]:
+        if int(concepto) in [wsfev1.SERVICIOS, wsfev1.PRODUCTOYSERVICIOS]:
             fecha_serv_desde = fecha_cbte
             fecha_serv_hasta = fecha_cbte
             fecha_venc_pago = fecha_cbte
@@ -107,23 +123,25 @@ class MainController(ControladorBase):
                 moneda_id, moneda_ctz)
 
         #tributo = Tributo.select().where(Tributo.nrocontrol == d.nrocontrol)
-        tributo = Tributo.select().where(Tributo.nrelacion == d.nrelacion)
-        for t in tributo:
-            idimp = t.tributoid
-            detalle = t.descripcion
-            base_imp = round(t.baseimp, 2)
-            alicuota = round(t.alic, 2)
-            importe = str(round(t.importe, 2))
-            wsfev1.AgregarTributo(tributo_id=idimp, desc=detalle, base_imp=base_imp,
-                                  alic=alicuota, importe=importe)
+        if int(tipo_cbte) not in [11, 12, 13]: #comprobantes C no se informan tributos
+            tributo = Tributo.select().where(Tributo.nrelacion == d.nrelacion)
+            for t in tributo:
+                idimp = t.tributoid
+                detalle = t.descripcion
+                base_imp = round(t.baseimp, 2)
+                alicuota = round(t.alic, 2)
+                importe = str(round(t.importe, 2))
+                wsfev1.AgregarTributo(tributo_id=idimp, desc=detalle, base_imp=base_imp,
+                                      alic=alicuota, importe=importe)
 
         #iva = IVA.select().where(IVA.nrocontrol == d.nrocontrol)
-        iva = IVA.select().where(IVA.nrelacion == d.nrelacion)
-        for i in iva:
-            id = i.ivaid
-            base_imp = round(i.baseimp, 2)
-            iva = round(i.importe, 2)
-            wsfev1.AgregarIva(id, base_imp, iva)
+        if int(tipo_cbte) not in [11, 12, 13]:#comprobantes C no se informan iva
+            iva = IVA.select().where(IVA.nrelacion == d.nrelacion)
+            for i in iva:
+                id = i.ivaid
+                base_imp = round(i.baseimp, 2)
+                iva = round(i.importe, 2)
+                wsfev1.AgregarIva(id, base_imp, iva)
 
         #cbterel = CbteRel.select().where(CbteRel.nrocontrol == d.nrocontrol)
         cbterel = CbteRel.select().where(CbteRel.nrelacion == d.nrelacion)
@@ -225,6 +243,13 @@ class MainController(ControladorBase):
                                          Encabezado.tipows == 'WS')
         total = data.count() or 1
         i = 1.
+        to_address = LeerIni(clave='to_address', key='email') or 'oscar@ferreteriaavenida.com.ar'
+        from_email = LeerIni(clave='from_address', key='email') or 'info@ferreteriaavenida.com.ar'
+        if LeerIni(clave='password_email', key='email'):
+            password_email = desencriptar(LeerIni(clave='password_email', key='email'), LeerIni('key_email'))
+        else:
+            password_email = 'Fasa0298'
+
         for d in data:
             try:
                 self.view.lblProcesamiento.setText("Procesando comprobante {} de {}".format(i, total))
@@ -240,12 +265,12 @@ class MainController(ControladorBase):
                     d.errmsg = self.errmsg
                     d.motivoobs = self.motivoobs
                     d.vencecae = datetime.today()
-                    envia_correo(to_address='oscar@ferreteriaavenida.com.ar',
-                                 from_address='info@ferreteriaavenida.com.ar',
-                                 subject='Error al generar FE',
+                    envia_correo(to_address=to_address,
+                                 from_address=from_email,
+                                 subject='Error al generar FE - {}'.format(LeerIni('nombre_sistema')),
                                  message="Error: {} {}".format(DeCodifica(self.errmsg),
                                                                DeCodifica(self.motivoobs)),
-                                 password_email='Fasa0298')
+                                 password_email=password_email)
                 d.save()
                 i += 1
             except Exception as e:
@@ -255,11 +280,11 @@ class MainController(ControladorBase):
                 d.errorprog = traceback.format_exc()
                 d.save()
                 print "Error: {}".format(e)
-                envia_correo(to_address='oscar@ferreteriaavenida.com.ar',
-                             from_address='info@ferreteriaavenida.com.ar',
-                             subject='Error al generar FE',
+                envia_correo(to_address=to_address,
+                             from_address=from_email,
+                             subject='Error al generar FE - {}'.format(LeerIni('nombre_sistema')),
                              message="Error: {} {}".format(e, traceback.format_exc()),
-                             password_email='Fasa0298')
+                             password_email=password_email)
 
         self.view.lblProcesamiento.setText("Sin comprobantes para procesar")
         self.view.avance.actualizar(100)

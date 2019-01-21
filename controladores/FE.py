@@ -35,6 +35,15 @@ class FEv1(WSFEv1):
         "27.0": 6
     }
     Cuit = ''
+    privatekey_homo = LeerIni(clave="privatekey_homo", key="WSAA")
+    cert_homo = LeerIni(clave="cert_homo", key="WSAA")
+    url_homo = LeerIni(clave='url_homo', key='WSAA')
+    cacert = "conf/afip_ca_info.crt"
+    cert_prod = LeerIni(clave="cert_prod", key="WSAA")
+    privatekey_prod = LeerIni(clave="privatekey_prod", key="WSAA")
+    url_prod = LeerIni(clave='url_prod', key='WSAA')
+    cuit_emisor = LeerIni(clave='cuit', key='WSFEv1')
+    empresa = 1 ##empresa por defecto
 
     def __init__(self):
         WSFEv1.__init__(self)
@@ -96,15 +105,22 @@ class FEv1(WSFEv1):
             tra = wsaa.CreateTRA(service=service)
 
             #Generar el mensaje firmado(CMS)
+            # if LeerIni(clave='homo') == 'S':#homologacion
+            #     cms = wsaa.SignTRA(tra, LeerIni(clave="cert_homo", key="WSAA"),
+            #                    LeerIni(clave="privatekey_homo", key="WSAA"))
+            #     ok = wsaa.Conectar("", LeerIni(clave='url_homo', key='WSAA'))  # Homologación
+            # else:
+            #     cacert = "conf/afip_ca_info.crt"
+            #     cms = wsaa.SignTRA(tra, LeerIni(clave="cert_prod", key="WSAA"),
+            #                    LeerIni(clave="privatekey_prod", key="WSAA"))
+            #     ok = wsaa.Conectar("", LeerIni(clave='url_prod', key='WSAA'), cacert=cacert) #Produccion
             if LeerIni(clave='homo') == 'S':#homologacion
-                cms = wsaa.SignTRA(tra, LeerIni(clave="cert_homo", key="WSAA"),
-                               LeerIni(clave="privatekey_homo", key="WSAA"))
-                ok = wsaa.Conectar("", LeerIni(clave='url_homo', key='WSAA'))  # Homologación
+                cms = wsaa.SignTRA(tra, self.cert_homo, self.privatekey_homo)
+                ok = wsaa.Conectar("", self.url_homo)  # Homologación
             else:
-                cacert = "conf/afip_ca_info.crt"
-                cms = wsaa.SignTRA(tra, LeerIni(clave="cert_prod", key="WSAA"),
-                               LeerIni(clave="privatekey_prod", key="WSAA"))
-                ok = wsaa.Conectar("", LeerIni(clave='url_prod', key='WSAA'), cacert=cacert) #Produccion
+
+                cms = wsaa.SignTRA(tra, self.cert_prod, self.privatekey_prod)
+                ok = wsaa.Conectar("", self.url_prod, cacert=self.cacert) #Produccion
 
             #Llamar al web service para autenticar
             ta = wsaa.LoginCMS(cms)
