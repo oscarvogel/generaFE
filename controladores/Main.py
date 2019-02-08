@@ -6,11 +6,14 @@ from datetime import datetime
 from PyQt4.QtGui import QApplication
 from peewee import fn
 
+from controladores.ConsultaPadronAfip import PadronAfip
 from controladores.ControladorBase import ControladorBase
 from controladores.FE import FEv1
+from controladores.WSConstComp import WSConstComp
 from libs.Utiles import LeerIni, FechaMysql, envia_correo, DeCodifica, inicializar_y_capturar_excepciones, desencriptar
 from modelos.CAEA import CAEA
 from modelos.CbteRelacionado import CbteRel
+from modelos.Constataciones import Constatacion
 from modelos.Encabezado import Encabezado
 from modelos.IVA import IVA
 from modelos.ModeloBase import ModeloBase
@@ -53,21 +56,27 @@ class MainController(ControladorBase):
         self.view.btnIniciar.setEnabled(False)
         while self.lProcesa:
             QApplication.processEvents()
+            Encabezado().close()
+            Encabezado().connect()
             #self.ObtieneCAEA() #obtiene CAE Anticipado 5 dias antes del inicio de la quincena
             self.GeneraCAE() #si tenemos internet obtenemos CAE
             #self.GeneraCAEA() #en caso de que no haya internet usamos el CAEA
+            self.Constatacion()
 
     def CreaFE(self, d, caea = None):
         ok = True
         cbterel = None
         wsfev1 = FEv1()
-        wsfev1.cuit_emisor = d.empresa.cuit.encode('ascii')
-        self.cuit = wsfev1.cuit_emisor
-        if LeerIni(clave='homo') == 'N': #produccion
-            wsfev1.cert_prod = d.empresa.crt.strip().encode('ascii')
-            wsfev1.privatekey_prod = d.empresa.key.strip().encode('ascii')
+        if LeerIni("multiempresa") == "SI":
+            wsfev1.cuit_emisor = d.empresa.cuit.encode('ascii')
+            self.cuit = wsfev1.cuit_emisor
+            if LeerIni(clave='homo') == 'N': #produccion
+                wsfev1.cert_prod = d.empresa.crt.strip().encode('ascii')
+                wsfev1.privatekey_prod = d.empresa.key.strip().encode('ascii')
 
-        wsfev1.empresa = d.empresa.codigo
+            wsfev1.empresa = d.empresa.codigo
+        else:
+            wsfev1.empresa = 1 #empresa por defecto
 
         ta = wsfev1.Autenticar()
         #Setear tocken y sign de autorizacion(ticket de accesso, pasos previos)
@@ -326,3 +335,70 @@ class MainController(ControladorBase):
                              subject='Error al generar FE con CAEA',
                              message="Error: {}".format(d.errmsg),
                              password_email='Fasa0298')
+
+    def Constatacion(self):
+        data = Constatacion.select().where(
+            Constatacion.resultado == '',
+            Constatacion.listo == b'\01'
+        )
+        total = data.count() or 1
+        i = 1.
+        wsdc = WSConstComp()
+
+        for d in data:
+            if LeerIni(clave='homo') == 'N':  # produccion
+                if LeerIni("multiempresa") == "SI":
+                    wsdc.cert_prod = d.empresa.crt.strip().encode('ascii')
+                    wsdc.privatekey_prod = d.empresa.key.strip().encode('ascii')
+                    wsdc.empresa = d.empresa.codigo
+                    wsdc.Cuit = d.empresa.cuit
+                else:
+                    wsdc.cert_prod = LeerIni(clave="cert_prod", key="WSAA")
+                    wsdc.privatekey_prod = LeerIni(clave="privatekey_prod", key="WSAA")
+                    wsdc.empresa = 1
+                    wsdc.Cuit = LeerIni(clave='cuit', key='WSFEv1')
+            else:
+                wsdc.cert_homo = 'certificados/vogel_wsass.crt'
+                wsdc.privatekey_homo = 'certificados/clave_privada_20233472035_201804143312.key'
+                wsdc.empresa = 1
+                wsdc.Cuit = LeerIni(clave='cuit', key='WSFEv1')
+
+            self.view.lblProcesamiento.setText("Constatando comprobante {} de {}".format(i, total))
+            self.view.avance.actualizar(i / total * 100)
+            try:
+                ok = wsdc.Comprobar(
+                    cbte_modo = d.cbtemodo,
+                    cuit_emisor = d.cuitemisor,
+                    pto_vta = d.ptovta,
+                    cbte_tipo = d.cbtetipo,
+                    cbte_nro = d.cbtenro,
+                    cbte_fch = FechaMysql(d.fechacbte),
+                    imp_total = d.imptotal,
+                    cod_autorizacion = d.codaut,
+                    doc_tipo_receptor = d.doctiporec,
+                    doc_nro_receptor = d.docnrorec
+                )
+                if ok:
+                    d.resultado = 'A'
+                    d.obs = ''
+                    padron = PadronAfip()
+                    ok = padron.ConsultarPersona(cuit=d.cuitemisor)
+                    if not ok:
+                        d.resultado = 'R'
+                        d.obs = "Error de constancia, verifique el cuit"
+                else:
+                    d.resultado = wsdc.Resultado
+                    d.errmsg = wsdc.ErrMsg
+                    d.obs = wsdc.Obs
+            except:
+                d.resultado = 'E'
+                d.excepcion = traceback.format_exc()
+
+            item = [
+                d.ptovta, d.cbtenro, d.codaut, d.fechacbte, 'Constatacion'
+            ]
+            if self.view.gridFacturas.rowCount() > 10:
+                self.view.gridFacturas.removeRow(0)
+
+            self.view.gridFacturas.AgregaItem(items=item)
+            d.save()

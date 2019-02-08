@@ -19,6 +19,9 @@ class ConfigController(ControladorBase):
     def conectarWidgets(self):
         self.view.btnCerrar.clicked.connect(self.Cerrar)
         self.view.btnGraba.clicked.connect(self.GrabaDatos)
+        self.view.btnInicioSistema.clicked.connect(
+            self.BuscaCarpeta
+        )
         self.view.textCorreo.editingFinished.connect(lambda: self.ValidaEmail(self.view.textCorreo.text()))
         self.view.textCorreoErrores.editingFinished.connect(
             lambda: self.ValidaEmail(self.view.textCorreoErrores.text())
@@ -51,6 +54,8 @@ class ConfigController(ControladorBase):
         if LeerIni('password_email', key='correo'):
             self.view.textPassSMTP.setText(desencriptar(LeerIni('password_email', key='correo'),
                                                         LeerIni('key_email', key='correo')))
+        self.view.textPuerto.setText(LeerIni('puerto'))
+        self.view.cboMultiEmpresa.setText(LeerIni('multiempresa'))
 
 
     def GrabaDatos(self):
@@ -74,6 +79,8 @@ class ConfigController(ControladorBase):
         GrabarIni(valor=keysmtp, key='correo', clave='key_email')
         GrabarIni(valor=self.view.textPuertoSMTP.text(), key='correo', clave='puerto_smtp')
         GrabarIni(valor=self.view.textUserSMTP.text(), key='correo', clave='user_smtp')
+        GrabarIni(valor=self.view.textPuerto.text(), clave='puerto', key='param')
+        GrabarIni(valor=self.view.cboMultiEmpresa.text(), clave='multiempresa', key='param')
         Ventanas.showAlert("Sistema", "Datos grabados correctamente")
         self.Cerrar()
 
@@ -89,3 +96,7 @@ class ConfigController(ControladorBase):
         if dlg.exec_():
             filename = dlg.selectedFiles()[0]
             control.setText(filename)
+
+    def BuscaCarpeta(self):
+        file = str(QFileDialog.getExistingDirectory(self.view, "Seleccione la carpeta de inicio"))
+        self.view.textInicioSistema.setText(file + '\\')

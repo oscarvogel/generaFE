@@ -40,6 +40,9 @@ class ModeloBase(Model):
     def connect(self):
         db.connect(reuse_if_open=True)
 
+    def close(self):
+        db.close()
+
     """A base model that will use our MySQL database"""
     class Meta:
         database = db
