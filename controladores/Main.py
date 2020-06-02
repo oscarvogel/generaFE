@@ -61,7 +61,8 @@ class MainController(ControladorBase):
             #self.ObtieneCAEA() #obtiene CAE Anticipado 5 dias antes del inicio de la quincena
             self.GeneraCAE() #si tenemos internet obtenemos CAE
             #self.GeneraCAEA() #en caso de que no haya internet usamos el CAEA
-            self.Constatacion()
+            if LeerIni("constatacion") == "S":
+                self.Constatacion()
 
     def CreaFE(self, d, caea = None):
         ok = True

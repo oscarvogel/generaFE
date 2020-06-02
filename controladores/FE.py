@@ -38,7 +38,9 @@ class FEv1(WSFEv1):
     privatekey_homo = LeerIni(clave="privatekey_homo", key="WSAA")
     cert_homo = LeerIni(clave="cert_homo", key="WSAA")
     url_homo = LeerIni(clave='url_homo', key='WSAA')
-    cacert = "conf/afip_ca_info.crt"
+    # cacert = "conf/afip_ca_info.crt"
+    #desde junio 2020 por problemas de certificados de la afip cambio el cacert
+    cacert = True
     cert_prod = LeerIni(clave="cert_prod", key="WSAA")
     privatekey_prod = LeerIni(clave="privatekey_prod", key="WSAA")
     url_prod = LeerIni(clave='url_prod', key='WSAA')
@@ -64,8 +66,8 @@ class FEv1(WSFEv1):
         cache = None
         proxy = ""
         wrapper = ""  # "pycurl"
-        #cacert = True  # geotrust.crt"
-        cacert = "conf/afip_ca_info.crt"
+        cacert = True  # geotrust.crt"
+        # cacert = "conf/afip_ca_info.crt"
         ok = self.Conectar(cache, wsdl, proxy, wrapper, cacert)
 
         if not ok:
