@@ -1,0 +1,7 @@
+# Dependabot desactivado para este repositorio.
+# Este proyecto se mantiene manualmente y no recibe actualizaciones
+# automaticas de dependencias. Para reactivar Dependabot,
+# restaurar este archivo con una lista no vacia bajo `updates:`.
+# Documentacion: https://docs.github.com/en/code-security/dependabot
+version: 2
+updates: []
